@@ -1226,4 +1226,7 @@ INT AsicReadAggCnt(struct _RTMP_ADAPTER *pAd, ULONG *aggCnt, int cnt_len);
 VOID StopDmaTx(struct _RTMP_ADAPTER *pAd, UCHAR Level);
 VOID StopDmaRx(struct _RTMP_ADAPTER *pAd, UCHAR Level);
 
+typedef VOID (*ChipSwitchChannel_t)(struct _RTMP_ADAPTER *pAd, UCHAR ch, enum SWITCH_CHANNEL_STAGE Stage);
+typedef VOID (*Calibration_t)(struct _RTMP_ADAPTER *pAd, UINT32 CalibrationID, UINT32 Parameter);
+
 #endif /* __RTMP_CHIP_H__ */

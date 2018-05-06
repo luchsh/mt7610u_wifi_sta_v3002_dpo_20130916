@@ -102,9 +102,23 @@ static inline VOID __RTMP_SetPeriodicTimer(
 	IN unsigned long timeout)
 {
 	timeout = ((timeout * OS_HZ) / 1000);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+	(&pTimer->t)->expires = jiffies + timeout;
+	add_timer(&pTimer->t);
+#else
 	pTimer->expires = jiffies + timeout;
 	add_timer(pTimer);
+#endif
 }
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+static void legacy_timer_emu_func(struct timer_list *t)
+{
+       struct legacy_timer_emu *lt = from_timer(lt, t, t);
+       lt->function(lt->data);
+}
+#endif
+
 
 /* convert NdisMInitializeTimer --> RTMP_OS_Init_Timer */
 static inline VOID __RTMP_OS_Init_Timer(
@@ -113,8 +127,13 @@ static inline VOID __RTMP_OS_Init_Timer(
 	IN TIMER_FUNCTION function,
 	IN PVOID data)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+	if (!timer_pending(&pTimer->t)) {
+		timer_setup(&pTimer->t, legacy_timer_emu_func, 0);
+#else
 	if (!timer_pending(pTimer)) {
 		init_timer(pTimer);
+#endif
 		pTimer->data = (unsigned long)data;
 		pTimer->function = function;
 	}
@@ -124,12 +143,22 @@ static inline VOID __RTMP_OS_Add_Timer(
 	IN OS_NDIS_MINIPORT_TIMER * pTimer,
 	IN unsigned long timeout)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+	if (timer_pending(&pTimer->t))
+		return;
+#else
 	if (timer_pending(pTimer))
 		return;
+#endif
 
 	timeout = ((timeout * OS_HZ) / 1000);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+	(&pTimer->t)->expires = jiffies + timeout;
+	add_timer(&pTimer->t);
+#else
 	pTimer->expires = jiffies + timeout;
 	add_timer(pTimer);
+#endif
 }
 
 static inline VOID __RTMP_OS_Mod_Timer(
@@ -137,15 +166,24 @@ static inline VOID __RTMP_OS_Mod_Timer(
 	IN unsigned long timeout)
 {
 	timeout = ((timeout * OS_HZ) / 1000);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+	mod_timer(&pTimer->t, jiffies + timeout);
+#else
 	mod_timer(pTimer, jiffies + timeout);
+#endif
 }
 
 static inline VOID __RTMP_OS_Del_Timer(
 	IN OS_NDIS_MINIPORT_TIMER * pTimer,
 	OUT BOOLEAN *pCancelled)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+	if (timer_pending(&pTimer->t))
+		*pCancelled = del_timer_sync(&pTimer->t);
+#else
 	if (timer_pending(pTimer))
 		*pCancelled = del_timer_sync(pTimer);
+#endif
 	else
 		*pCancelled = TRUE;
 }
@@ -2030,7 +2068,7 @@ VOID RtmpDrvAllRFPrint(
 		if (file_w->f_op && file_w->f_op->write) {
 			file_w->f_pos = 0;
 			/* write data to file */
-			file_w->f_op->write(file_w, pBuf, BufLen, &file_w->f_pos);
+			file_w->f_op->write(file_w, (const char*)pBuf, BufLen, &file_w->f_pos);
 		}
 		filp_close(file_w, NULL);
 	}
@@ -3722,8 +3760,13 @@ VOID RTMP_OS_Add_Timer(NDIS_MINIPORT_TIMER *pTimerOrg, ULONG timeout)
 	 pTimer = (OS_NDIS_MINIPORT_TIMER *) (pTimerOrg->pContent);
 
 	if (pTimer) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
 		if (timer_pending(pTimer))
 			return;
+#else
+		if (timer_pending(&pTimer->t))
+			return;
+#endif
 
 		__RTMP_OS_Add_Timer(pTimer, timeout);
 	}
